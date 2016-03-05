@@ -1,0 +1,84 @@
+#!/usr/bin/python3
+# gencompose
+# Copyright © 2016 Samuel Holland <samuel@sholland.org>
+# See COPYING in the project directory for license terms.
+# vim: expandtab:sts=2:sw=2:ts=8:tw=110
+#
+
+from keysyms import keysyms
+import tables
+import unicodedata
+
+unicode_data=[]
+unicode_data_file='UnicodeData.txt'
+
+class Codepoint:
+  def __init__(self, codepoint_info):
+    # See http://www.unicode.org/reports/tr44/#UnicodeData.txt
+    info_array = codepoint_info.split(';')
+    self.index = int(info_array[0], base=16)
+    self.name = info_array[1]
+    self.numeric_value = info_array[8]
+    self.character = chr(self.index)
+
+def keysym(char):
+  return keysyms.get(ord(char), char)
+
+def normalize(char):
+  return unicodedata.normalize('NFKD', char)[0]
+
+def append(keys, char):
+  event = '<Multi_key>'
+  for key in keys:
+    event += ' <' + keysym(key) + '>'
+  print('{:40}: "{}" U{:05X} # {}'.format(event, char, ord(char), unicodedata.name(char)))
+
+def generate_accent_block(accent, suffix):
+  # Also print <backspace> <suffix> = COMBINING, <space> <suffix> = SELF
+  for codepoint in unicode_data:
+    if codepoint.name.startswith('LATIN ') and codepoint.name.endswith('WITH ' + accent):
+      append([normalize(codepoint.character), suffix], codepoint.character)
+
+def generate_alnum_block(match, prefix):
+  for codepoint in unicode_data:
+    if match in codepoint.name and (codepoint.name.startswith('LATIN ') or codepoint.name.startswith(match)):
+      append([prefix, normalize(codepoint.character)], codepoint.character)
+
+def generate_fraction_block():
+  for codepoint in unicode_data:
+    if codepoint.name.startswith('VULGAR FRACTION ') and 'ZERO' not in codepoint.name:
+      append(codepoint.numeric_value, codepoint.character)
+
+def generate_math_block(match, prefix):
+  for codepoint in unicode_data:
+    # Greek letters are spelled out, so the last word is >1 character long. Skip them.
+    if codepoint.name.startswith(match) and (' ' == codepoint.name[-2] or 'DIGIT' in codepoint.name):
+      append([prefix, normalize(codepoint.character)], codepoint.character)
+
+def generate_table_block(table):
+  for entry in table:
+    append(entry[1], entry[0])
+
+with open(unicode_data_file) as file:
+  for line in file:
+    unicode_data.append(Codepoint(line))
+
+generate_accent_block('ACUTE', "'")
+generate_accent_block('CEDILLA', ',')
+generate_accent_block('DIAERESIS', '"')
+generate_accent_block('TILDE', '~')
+#generate_alnum_block('MODIFIER LETTER SMALL', '^')
+generate_alnum_block('SUBSCRIPT', '_')
+generate_alnum_block('SUPERSCRIPT', '^')
+generate_fraction_block()
+generate_math_block('DOUBLE-STRUCK CAPITAL', '|')
+generate_math_block('MATHEMATICAL BOLD ITALIC', '/')
+generate_math_block('MATHEMATICAL DOUBLE-STRUCK', '|')
+generate_table_block(tables.arrows)
+generate_table_block(tables.bullets)
+generate_table_block(tables.cards)
+generate_table_block(tables.greek)
+generate_table_block(tables.music)
+generate_table_block(tables.operators)
+generate_table_block(tables.punctuation)
+generate_table_block(tables.symbols)
