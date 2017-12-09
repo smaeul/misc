@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+
+# Scraper for Bing Gallery (http://www.bing.com/gallery/), an archive of images
+# previously shown on the Bing home page. Not all images are downloadable using
+# this scraper (for licensing reasons), but they are available (if recent
+# enough) from the binghomepage scraper.
+
+import json
+import os.path
+import subprocess
+import urllib.request
+
+
+# Adapted from JavaScript in https://az615200.vo.msecnd.net/site/scripts/app.c1259c75.js
+def url(filename):
+    domains = ["az608707.vo.msecnd.net", "az619519.vo.msecnd.net", "az619822.vo.msecnd.net"]
+    index = 0
+    for char in list(filename):
+        index = (index << 5) - index + ord(char)
+    return "http://" + domains[abs(index) % len(domains)] + "/files/" + filename
+
+listurl = "https://www.bing.com/gallery/home/browsedata?z=0"
+outdir = "/data/binghomepage"
+
+listdata = urllib.request.urlopen(listurl).readall()
+listjson = json.loads(listdata.decode("utf-8").split(";")[1].split("=")[1])["imageIds"]
+for idx, id in enumerate(listjson):
+    if idx > 25:
+        break
+
+    infourl = "https://www.bing.com/gallery/home/imagedetails/" + id + "?z=0"
+    infodata = urllib.request.urlopen(infourl).readall()
+    infojson = json.loads(infodata.decode("utf-8"))
+    infofile = outdir + "/" + "_".join(infojson["wpFullFilename"].split("_")[:-1]) + "_gallery.json"
+
+    if os.path.isfile(infofile):
+        continue
+
+    print("Saving info for " + infojson["title"].split("(")[0])
+    f = open(infofile, "w")
+    json.dump(infojson, f, sort_keys=True, indent=4)
+    f.close()
+
+    if infojson["wallpaper"] == False:
+        print("Skipping (unavailable) " + infojson["title"].split("(")[0])
+        continue
+
+    print("Downloading " + infojson["title"].split("(")[0])
+    resolutions = ["1366x768", "1920x1200"]
+    for res in resolutions:
+        filename = infojson["wpFullFilename"]
+        if res != "1920x1200":
+            filename = filename.replace("1920x1200", res)
+        subprocess.call(["wget", "-nv", "-c", "-N", "-P", outdir, url(filename)])
