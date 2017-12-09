@@ -1,0 +1,31 @@
+#!/bin/bash -eu
+
+ipblock=3
+ipfile=/containers/addresses
+
+json=$(cat)
+name=$(printf '%s' "$json" | jq -r .id)
+pid=$(printf '%s' "$json" | jq -r .pid)
+sum=$(printf '%s' "$name" | cat /dev/stdin /etc/machine-id | sha1sum -)
+mac=fe:${sum:0:2}:${sum:2:2}:${sum:4:2}:${sum:6:2}:${sum:8:2}
+subnet=$(grep -F "$mac" "$ipfile" | cut -f2)
+ipaddr=$(grep -F "$mac" "$ipfile" | cut -f3)
+
+if test -z "$ipaddr" ; then
+  subnet=$(tail -n1 "$ipfile" | cut -f2)
+  test -z "$subnet" && subnet=11
+  lastip=$(tail -n1 "$ipfile" | cut -f3)
+  test -z "$lastip" && lastip=-1
+  ipaddr=$((lastip+1))
+  printf '%s\t%s\t%s\t%s\n' "$mac" "$subnet" "$ipaddr" "$name" >> "$ipfile"
+fi
+
+subhex=$(printf '%x' "$subnet")
+
+ip link add link "bond0.${subnet}" "$name" address "$mac" type macvlan mode bridge
+ip link set "$name" netns "$pid"
+nsenter -n -t "$pid" ip link set "$name" up
+nsenter -n -t "$pid" ip addr add "192.168.${subnet}.${ipblock}${ipaddr}/24" dev "$name"
+nsenter -n -t "$pid" ip rout add default via "192.168.${subnet}.1"
+nsenter -n -t "$pid" ip -6 addr add "2605:a601:805:4c0${subhex}::${ipblock}:${ipaddr}/64" dev "$name"
+nsenter -n -t "$pid" ip -6 rout add default via "2605:a601:805:4c0${subhex}::1"
