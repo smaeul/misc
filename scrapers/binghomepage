@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+
+# Scraper for the images shown on the Bing home page. This script retrieves
+# the last 16 images in all available sizes. 1366x768 and 1920x1200 have
+# watermarks, 1920x1080 does not.
+
+import json
+import os.path
+import subprocess
+import urllib.request
+
+# For some reason, when idx<9 and n>8, only the first 8 images are returned.
+# However, if 9<=idx<=15 and n>1, the first 15 images are returned. To be
+# safe, set idx to the max (15) and n to as large a number as reasonable.
+listurl = "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=100"
+outdir = "/data/binghomepage"
+
+listdata = urllib.request.urlopen(listurl).readall()
+listjson = json.loads(listdata.decode("utf-8"))["images"]
+for idx, img in enumerate(listjson):
+    infofile = outdir + "/" + img["urlbase"].split("/")[-1] + "_homepage.json"
+    if os.path.isfile(infofile):
+        continue
+    f = open(infofile, "w")
+    json.dump(img, f, sort_keys=True, indent=4)
+    f.close()
+
+    print("Downloading " + img["copyright"].split("(")[0])
+
+    resolutions = ["1366x768", "1920x1080"]
+    if img["wp"]:
+        resolutions.append("1920x1200")
+
+    for res in resolutions:
+        url = "https://www.bing.com" + img["urlbase"] + "_" + res + ".jpg"
+        subprocess.call(["wget", "-nv", "-c", "-N", "-P", outdir, url])
