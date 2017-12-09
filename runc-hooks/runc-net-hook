@@ -1,31 +1,54 @@
-#!/bin/bash -eu
+#!/bin/sh -eu
+#
+# Copyright © 2016-2017 Samuel Holland <samuel@sholland.org>
+# SPDX-License-Identifier: 0BSD
+# vim: expandtab:sts=2:sw=2:ts=8:tw=80
+#
 
-ipblock=3
-ipfile=/containers/addresses
+file=/data/config/network
 
 json=$(cat)
-name=$(printf '%s' "$json" | jq -r .id)
+cid=$(printf '%s' "$json" | jq -r .id)
 pid=$(printf '%s' "$json" | jq -r .pid)
-sum=$(printf '%s' "$name" | cat /dev/stdin /etc/machine-id | sha1sum -)
-mac=fe:${sum:0:2}:${sum:2:2}:${sum:4:2}:${sum:6:2}:${sum:8:2}
-subnet=$(grep -F "$mac" "$ipfile" | cut -f2)
-ipaddr=$(grep -F "$mac" "$ipfile" | cut -f3)
+sum=$(printf '%s' "$(hostname)${cid}" | sha1sum)
+mac=$(printf '%s' "$sum" | \
+  sed 's/^\(..\)\(..\)\(..\)\(..\)\(..\).*$/42:\1:\2:\3:\4:\5/')
 
-if test -z "$ipaddr" ; then
-  subnet=$(tail -n1 "$ipfile" | cut -f2)
-  test -z "$subnet" && subnet=11
-  lastip=$(tail -n1 "$ipfile" | cut -f3)
-  test -z "$lastip" && lastip=-1
-  ipaddr=$((lastip+1))
-  printf '%s\t%s\t%s\t%s\n' "$mac" "$subnet" "$ipaddr" "$name" >> "$ipfile"
+if grep -Fq "$mac" "$file"; then
+  line=$(grep -F "$mac" "$file")
+  subnet=$(printf '%s' "$line" | awk '{ print $3 }')
+  address=$(printf '%s' "$line" | awk '{ print $4 }')
+elif grep -qv '^[[:space:]]*#' "$file"; then
+  line=$(grep -v '^[[:space:]]*#' "$file" | tail -n1)
+  subnet=$(printf '%s' "$line" | awk '{ print $3 }')
+  address=$(printf '%s' "$line" | awk '{ print $4 }')
+  address=$((address+1))
+else
+  echo "manually add ${mac} to ${file}"
+  exit 1
 fi
 
+addrhex=$(printf '%x' "$address")
 subhex=$(printf '%x' "$subnet")
 
-ip link add link "bond0.${subnet}" "$name" address "$mac" type macvlan mode bridge
-ip link set "$name" netns "$pid"
-nsenter -n -t "$pid" ip link set "$name" up
-nsenter -n -t "$pid" ip addr add "192.168.${subnet}.${ipblock}${ipaddr}/24" dev "$name"
-nsenter -n -t "$pid" ip rout add default via "192.168.${subnet}.1"
-nsenter -n -t "$pid" ip -6 addr add "2605:a601:805:4c0${subhex}::${ipblock}:${ipaddr}/64" dev "$name"
-nsenter -n -t "$pid" ip -6 rout add default via "2605:a601:805:4c0${subhex}::1"
+ip link add "$cid" address "$mac" type veth peer name veth-"$cid"
+ip link set "$cid" netns "$pid"
+ip link set veth-"$cid" up addrgenmode none master bridge
+bridge vlan del dev veth-"$cid" vid 1
+bridge vlan add dev veth-"$cid" vid "$subnet" pvid untagged
+
+export address addrhex cid subnet subhex
+nsenter -n -t "$pid" execlineb -Pc '
+  multisubstitute {
+    importas -u address address
+    importas -u addrhex addrhex
+    importas -u cid cid
+    importas -u subhex subhex
+    importas -u subnet subnet
+  }
+  if { ip link set ${cid} up }
+  if { ip addr add 2605:a601:805:4c${subhex}::${addrhex}/64 dev ${cid} }
+  if { ip addr add 192.168.${subnet}.${address}/24 dev ${cid} }
+  if { ip route add default via 2605:a601:805:4c${subhex}::1 }
+  if { ip route add default via 192.168.${subnet}.1 }
+'
