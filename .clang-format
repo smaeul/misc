@@ -1,0 +1,19 @@
+---
+Language: Cpp
+BasedOnStyle: WebKit
+AlignTrailingComments: true
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortFunctionsOnASingleLine: None
+AlwaysBreakAfterDefinitionReturnType: All
+BreakBeforeBraces: Linux
+ColumnLimit: 80
+IndentWidth: 8
+KeepEmptyLinesAtTheStartOfBlocks: false
+PointerAlignment: Right
+SpacesBeforeTrailingComments: 1
+SpacesInContainerLiterals: true
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+TabWidth: 8
+UseTab: ForIndentation
+...
