@@ -1,8 +1,8 @@
-#!/bin/bash
-# genkeysyms
+#!/bin/sh -eu
+#
 # Copyright © 2016 Samuel Holland <samuel@sholland.org>
 # See COPYING in the project directory for license terms.
-# vim: expandtab:sts=2:sw=2:ts=8:tw=110
+# vim: expandtab:sts=2:sw=2:ts=8:tw=80
 #
 
 header=/usr/include/X11/keysymdef.h
@@ -12,21 +12,24 @@ printf "keysyms = {\n"
 
 # Control characters
 grep 'XK_\S\{2,\}.*0xff[01]' "${header}" | \
-  sed 's/^.*XK_\(\S\+\)\s.*0xff\(.\{2\}\).*$/  0x00\2: "\1",/'
+  sed 's/^.*XK_\(\S\+\)\s.*0xff\(.\{2\}\).*$/    0x00\2: "\1",/'
 
 # Printable characters (ASCII) except for characters that are themselves
 grep 'XK_\S\{2,\}.*0x00[2-7]' "${header}" | \
   grep -Fv deprecated | \
-  sed 's/^.*XK_\(\S\+\)\s.*0x\(.\{4\}\).*$/  0x\2: "\1",/'
+  sed 's/^.*XK_\(\S\+\)\s.*0x\(.\{4\}\).*$/    0x\2: "\1",/'
 
-# These keysyms don't have associated codepoints, but making something up allows us to use them in events.
+# These keysyms don't have associated codepoints, but making something up
+# allows us to use them in events.
+
 # Use arrows for arrow keys
 cat << EOF
-  0x2190: "Left",
-  0x2191: "Up",
-  0x2192: "Right",
-  0x2193: "Down",
+    0x2190: "Left",
+    0x2191: "Up",
+    0x2192: "Right",
+    0x2193: "Down",
 EOF
+
 # No codepoint for these yet...
 #0x0050 Home
 #0x0055 Prior
