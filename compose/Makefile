@@ -1,6 +1,6 @@
 #
-# Copyright © 2016 Samuel Holland <samuel@sholland.org>
-# See LICENSE in the project directory for license terms.
+# Copyright © 2016-2017 Samuel Holland <samuel@sholland.org>
+# SPDX-License-Identifier: 0BSD
 # vim: ft=make:noexpandtab:sts=8:sw=8:ts=8:tw=80
 #
 

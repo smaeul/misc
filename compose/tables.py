@@ -1,7 +1,7 @@
 #
 # Copyright © 2016-2017 Samuel Holland <samuel@sholland.org>
 # Based in part on a work by Christopher Olah <chris@colah.ca>
-# I believe this file is too trivial to be copyrightable, and is therefore public domain.
+# SPDX-License-Identifier: 0BSD
 # vim: expandtab:sts=4:sw=4:ts=8:tw=80
 #
 
