@@ -2,26 +2,58 @@
 
 import socketserver
 import subprocess
-import syslog
+import sys
+
+device = "00:14.0"
+masks = {
+    "guest": 0x003c,
+    "host": 0x003f
+}
+state = "init"
+
 
 def change_usb_state(action):
     global state
-    if action == state: return
-    if action == "toggle": action = "guest" if state == "host" else "host"
-    syslog.syslog("Setting xHCI port routing mask to {:#x}".format(masks[action]))
-    if subprocess.call(["setpci", "-s0:14.0", "0xd0.L=0x{:08x}".format(masks[action])]) == 0: state = action
-    else: syslog.syslog("Calling setpci failed. Assuming routing is unchanged.")
 
-class PCIHandler(socketserver.StreamRequestHandler):
+    if action == state:
+        return
+    if action == "toggle":
+        action = "guest" if state == "host" else "host"
+
+    f = open("/sys/devices/pci0000:00/0000:{}/power/control".format(device), "r+")
+    if "auto" in f.read():
+        print("Disabling PCI power management for xHCI device {}".format(device))
+        f.seek(0)
+        f.write("on")
+    f.close()
+
+    mask = "0x{:04x}".format(masks[action])
+    print(">> Setting xHCI port routing mask to {}".format(mask))
+    if subprocess.call(["setpci", "-s{}".format(device), "0xd0.W={}".format(mask)]):
+        print("Calling setpci failed! Assuming routing is unchanged")
+    else:
+        state = action
+
+
+class USBHandler(socketserver.StreamRequestHandler):
     def handle(self):
         for line in self.rfile:
-            action = line.strip().decode("utf-8")
-            syslog.syslog("Got action request: {}".format(action))
-            if action in ["guest", "host", "toggle"]: change_usb_state(action)
+            try:
+                action = line.strip().decode("utf-8")
+            except UnicodeDecodeError:
+                continue
+            if action in ["guest", "host", "toggle"]:
+                print("Got USB action request: {}".format(action))
+                change_usb_state(action)
+                sys.stdout.flush()
 
-class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer): pass
 
-masks = { "guest": 0x003c, "host": 0x003f }
-state = "boot"
-server = ThreadedTCPServer(("127.0.0.1", 10), PCIHandler)
+class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    pass
+
+print("Setting initial USB port state")
+change_usb_state("host")
+print("Listening for action requests")
+sys.stdout.flush()
+server = ThreadedTCPServer(("127.0.0.1", 10), USBHandler)
 server.serve_forever()
