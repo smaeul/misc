@@ -1,0 +1,28 @@
+#!/bin/sh -eu
+#
+# Copyright © 2016-2017 Samuel Holland <samuel@sholland.org>
+# SPDX-License-Identifier: 0BSD
+# vim: expandtab:sts=2:sw=2:ts=8:tw=80
+#
+
+for repo in /etc/portage/repos.conf/*; do
+  location=$(grep '^location' "$repo")
+  location=${location##* }
+  uri=$(grep '^sync-uri' "$repo")
+  uri=${uri##* }
+
+  test -d "$location"/.git && continue
+
+  mkdir -p "$location"
+  git -C "$location" init
+  rm -fr "$location"/.git/hooks
+  git -C "$location" remote add origin "$uri"
+  git -C "$location" fetch origin
+  git -C "$location" config core.sparseCheckout true
+  printf '%s\n' > "$location"/.git/info/sparse-checkout \
+    '.gitignore' \
+    'eclass/' \
+    'metadata/' \
+    'profiles/'
+  git -C "$location" checkout master
+done
