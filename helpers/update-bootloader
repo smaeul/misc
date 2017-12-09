@@ -1,0 +1,40 @@
+#!/bin/sh -eu
+#
+# Copyright © 2016-2017 Samuel Holland <samuel@sholland.org>
+# SPDX-License-Identifier: 0BSD
+# vim: expandtab:sts=2:sw=2:ts=8:tw=80
+#
+
+. /etc/bootloader.conf || exit 1
+
+: ${INITRAMFS:=}
+: ${OPTIONS:=}
+: ${OPTIONS_DEFAULT:=}
+: ${OPTIONS_FALLBACK:=}
+: ${SUFFIX:=}
+
+rm -f /boot/loader/entries/gentoo-*.conf
+for file in /boot/vmlinuz-*${SUFFIX}; do
+  version=${file##*vmlinuz-}
+  version=${version%${SUFFIX}}
+
+  cat > "/boot/loader/entries/gentoo-${version}.conf" << EOF
+title   Gentoo Linux
+version ${version}
+linux   /$(basename "$file")
+options ${OPTIONS} ${OPTIONS_DEFAULT}
+EOF
+  cat > "/boot/loader/entries/gentoo-fallback-${version}.conf" << EOF
+title   Gentoo Linux (fallback)
+version ${version}
+linux   /$(basename "$file")
+options ${OPTIONS} ${OPTIONS_FALLBACK}
+EOF
+  if test -n "$INITRAMFS"; then
+    echo "initrd  /initramfs-${version}" \
+      >> "/boot/loader/entries/gentoo-${version}.conf"
+    echo "initrd  /initramfs-${version}" \
+      >> "/boot/loader/entries/gentoo-fallback-${version}.conf"
+  fi
+  sed -i "s/^default.*\$/default gentoo-${version}/" /boot/loader/loader.conf
+done
