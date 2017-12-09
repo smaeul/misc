@@ -1,4 +1,9 @@
 #!/usr/bin/python3
+#
+# Copyright © 2016-2017 Samuel Holland <samuel@sholland.org>
+# SPDX-License-Identifier: 0BSD
+# vim: expandtab:sts=4:sw=4:ts=8:tw=100
+#
 
 import socketserver
 import subprocess
